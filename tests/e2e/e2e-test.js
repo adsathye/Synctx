@@ -36,7 +36,10 @@ const REPO_NAME = process.env.E2E_REPO || '.synctx-e2e-test';
 const MACHINE_ID = process.env.E2E_MACHINE || 'A';
 const SCENARIO_FILTER = process.env.E2E_SCENARIO || null;
 
-const HOME_DIR = os.homedir();
+// Use isolated temp directory when running outside Docker
+const IN_DOCKER = fs.existsSync('/.dockerenv') || process.env.E2E_DOCKER === '1';
+const FAKE_HOME = IN_DOCKER ? os.homedir() : path.join(os.tmpdir(), 'synctx-e2e-home');
+const HOME_DIR = FAKE_HOME;
 const SYNC_DIR = path.join(HOME_DIR, '.synctx');
 const COPILOT_DIR = path.join(HOME_DIR, '.copilot', 'session-state');
 const CLAUDE_DIR = path.join(HOME_DIR, '.claude', 'todos');
@@ -81,9 +84,10 @@ function synctx(args, { input, timeout, allowFail } = {}) {
       SYNCTX_SYNC_DIR: SYNC_DIR,
       SYNCTX_REPO_NAME: REPO_NAME,
       SYNCTX_NONINTERACTIVE: '1',
-      // Disable color for easier parsing
       NO_COLOR: '1',
       FORCE_COLOR: '0',
+      // Override home directory so tests don't touch real user data
+      ...(IS_WIN ? { USERPROFILE: HOME_DIR } : { HOME: HOME_DIR }),
     },
   });
   if (!allowFail && result.status !== 0 && result.status !== null) {
