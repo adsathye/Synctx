@@ -1,0 +1,13 @@
+# Development files
+synctx-spec.pdf
+logo.jpeg
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db

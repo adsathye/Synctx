@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Lock file (runtime artifact)
+.sync_lock
+
+# Build artifacts
+dist/
+
+# Development spec (not for public distribution)
+ai-session-flow-spec.pdf
+
+# Source logo (checkerboard JPEG — logo.png is the final)
+logo.jpeg
+
+# Runtime general log
+general.log
+
+# Social preview (uploaded via GitHub settings, not committed)
+social-preview.png

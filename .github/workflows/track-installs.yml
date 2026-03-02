@@ -1,0 +1,70 @@
+# Persist GitHub Traffic Data
+# GitHub only retains 14 days of traffic data. This workflow saves
+# daily aggregate clone/view counts to the private .synctx repo.
+#
+# Privacy: Only anonymous aggregate counts are stored (total clones,
+# total views). No user information, IPs, or referrers are collected.
+
+name: Track Installations
+
+on:
+  schedule:
+    # Run daily at 06:00 UTC (captures previous day's full traffic)
+    - cron: '0 6 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+permissions:
+  contents: read
+
+jobs:
+  save-traffic:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch and store traffic data
+        env:
+          GH_TOKEN: ${{ secrets.SYNCTX_TRAFFIC_TOKEN }}
+        run: |
+          # Only store anonymous aggregate counts — no user data
+          DATE=$(date -u +%Y-%m-%d)
+
+          CLONES=$(gh api repos/${{ github.repository }}/traffic/clones \
+            --jq '{total_count, total_uniques, daily: [.clones[] | {date: .timestamp[:10], count, uniques}]}' \
+            2>/dev/null || echo '{}')
+
+          VIEWS=$(gh api repos/${{ github.repository }}/traffic/views \
+            --jq '{total_count, total_uniques, daily: [.views[] | {date: .timestamp[:10], count, uniques}]}' \
+            2>/dev/null || echo '{}')
+
+          # Store in the private sync repo (not the public source repo)
+          OWNER=$(gh api user --jq .login 2>/dev/null || echo "")
+          if [ -z "$OWNER" ]; then
+            echo "  [error] Could not determine GitHub user"
+            exit 1
+          fi
+
+          PRIVATE_REPO="${OWNER}/.synctx"
+
+          # Check if private repo exists
+          gh repo view "$PRIVATE_REPO" --json name > /dev/null 2>&1 || {
+            echo "  [skip] Private repo $PRIVATE_REPO not found"
+            exit 0
+          }
+
+          # Clone private repo, add traffic data, push
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/${PRIVATE_REPO}.git" _traffic_repo 2>/dev/null
+          cd _traffic_repo
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          mkdir -p .traffic
+          echo "{\"date\":\"${DATE}\",\"clones\":${CLONES},\"views\":${VIEWS}}" \
+            > ".traffic/${DATE}.json"
+
+          git add .traffic/
+          git diff --cached --quiet || {
+            git commit -m "traffic: ${DATE} (anonymous aggregate counts only)"
+            git push
+          }
+
+          echo "  [ok] Traffic data saved to private repo (${DATE})"

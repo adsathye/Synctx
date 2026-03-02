@@ -1,0 +1,10 @@
+---
+name: list-copilot
+description: List synced Copilot sessions only (fast path)
+---
+
+Run this command and show the output to the user:
+
+```bash
+node ./scripts/sync-engine.js list --cli copilot
+```
