@@ -1,0 +1,42 @@
+{
+  "name": "synctx",
+  "version": "1.0.0",
+  "description": "Secure AI CLI session synchronizer with built-in Gitleaks secret scanning for GitHub Copilot CLI and Claude Code.",
+  "main": "scripts/sync-engine.js",
+  "bin": {
+    "synctx": "scripts/sync-engine.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/adsathye/synctx.git"
+  },
+  "homepage": "https://github.com/adsathye/synctx#readme",
+  "bugs": {
+    "url": "https://github.com/adsathye/synctx/issues"
+  },
+  "scripts": {
+    "push": "node scripts/sync-engine.js push",
+    "restore": "node scripts/sync-engine.js restore",
+    "clean": "node scripts/sync-engine.js clean",
+    "lint": "node --check scripts/sync-engine.js && node --check scripts/cli-art.js && node --check scripts/lib/config.js && node --check scripts/lib/logger.js && node --check scripts/lib/file-manager.js && node --check scripts/lib/security.js && node --check scripts/lib/git-manager.js && node --check scripts/lib/lock.js && node --check scripts/lib/tags.js && node --check scripts/lib/tombstones.js && node --check scripts/lib/cli-detect.js && node --check scripts/lib/confirm.js && node --check scripts/lib/format.js && node --check scripts/lib/commands/list.js && node --check scripts/lib/commands/delete.js && node --check scripts/lib/commands/prune.js && node --check scripts/postinstall.js && node --check scripts/auto-setup.js && node --check scripts/setup.js && node --check scripts/uninstall.js && node --check scripts/version-sync.js && node --check install.js",
+    "test": "node scripts/sync-engine.js status",
+    "test:unit": "node tests/unit/run.js",
+    "postinstall": "node scripts/postinstall.js",
+    "version-sync": "node scripts/version-sync.js"
+  },
+  "keywords": [
+    "copilot",
+    "claude",
+    "session",
+    "sync",
+    "sync-repo",
+    "security",
+    "gitleaks",
+    "cross-device"
+  ],
+  "author": "Aditya Sathye",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

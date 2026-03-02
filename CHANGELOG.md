@@ -1,0 +1,35 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.0.0] - 2026-03-02
+
+### Initial Public Release
+
+Secure, cross-device session synchronizer for GitHub Copilot CLI and Claude Code CLI.
+
+### Added
+
+- **Automatic Background Sync** — 5 lifecycle hooks (sessionStart, userPromptSubmitted, postToolUse, sessionEnd, errorOccurred)
+- **Gitleaks Secret Scanning** — detect → auto-redact → verify pipeline with audit trail
+- **Session Tagging** — friendly names with cross-machine sync and conflict resolution
+- **Session Restore** — cross-platform restore with workspace.yaml path fixup and Copilot CLI launch
+- **Git-Native Merge** — stage → commit → pull/merge → push (no data loss across machines)
+- **16 Commands** — sync, push, restore, list, list-copilot, list-claude, delete, prune, clean, tag, untag, tags, status, setup, uninstall, help
+- **10 Skills** — sync-sessions, restore-session, list-sessions, delete-session, prune-sessions, clean-sessions, session-status, tag-session, untag-session, list-tags
+- **Session Tombstones** — prevent re-sync of deleted/pruned sessions across machines
+- **Global CLI** — `synctx` command via npm link
+- **One-Line Installer** — setup.ps1 (Windows) and setup.sh (macOS/Linux) with auto-prerequisite installation
+- **Animated Progress** — inline spinner with carriage return updates
+- **24-Hour Git GC** — periodic aggressive garbage collection for disk optimization
+- **Cross-Platform** — Windows (primary), macOS/Linux (upcoming)
+- **Zero Dependencies** — Node.js stdlib only
+- **Unit Tests** — 94 tests covering core modules
+- **E2E Tests** — 69 scenarios on Windows (isolated home directory)
+- **Load Tests** — 180 tests (5 users × 11 scenarios)
+- **CI/CD** — GitHub Actions (Ubuntu + Windows) + npm publish workflow
+- **Community Docs** — CODE_OF_CONDUCT, CONTRIBUTING, SECURITY, issue/PR templates
+

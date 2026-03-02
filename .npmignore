@@ -1,0 +1,32 @@
+# Development files
+synctx-spec.pdf
+logo.jpeg
+
+# Tests
+tests/
+
+# GitHub / CI
+.github/
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.tgz
+
+# Docs not needed in package
+AGENTS.md
+agents/
+CONTRIBUTING.md
+CODE_OF_CONDUCT.md
+SECURITY.md
+.claude-plugin/
+logo.png
+.editorconfig

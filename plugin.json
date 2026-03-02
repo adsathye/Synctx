@@ -1,0 +1,23 @@
+{
+  "name": "synctx",
+  "description": "Secure AI CLI session synchronizer with built-in Gitleaks secret scanning for GitHub Copilot CLI and Claude Code.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Synctx Developer"
+  },
+  "license": "MIT",
+  "keywords": [
+    "copilot",
+    "claude",
+    "session",
+    "sync",
+    "security",
+    "gitleaks"
+  ],
+  "agents": "agents/",
+  "skills": [
+    "skills/"
+  ],
+  "commands": "commands/",
+  "hooks": "hooks.json"
+}

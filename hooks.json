@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "type": "command",
+        "bash": "node \"$HOME/.synctx-plugin/scripts/auto-setup.js\"",
+        "powershell": "node \"$HOME\\.synctx-plugin\\scripts\\auto-setup.js\"",
+        "timeoutSec": 30
+      },
+      {
+        "type": "command",
+        "bash": "node \"$HOME/.synctx-plugin/scripts/sync-engine.js\" push",
+        "powershell": "node \"$HOME\\.synctx-plugin\\scripts\\sync-engine.js\" push",
+        "timeoutSec": 120
+      }
+    ],
+    "userPromptSubmitted": [
+      {
+        "type": "command",
+        "bash": "node \"$HOME/.synctx-plugin/scripts/sync-engine.js\" push",
+        "powershell": "node \"$HOME\\.synctx-plugin\\scripts\\sync-engine.js\" push",
+        "timeoutSec": 120
+      }
+    ],
+    "postToolUse": [
+      {
+        "type": "command",
+        "bash": "node \"$HOME/.synctx-plugin/scripts/sync-engine.js\" push",
+        "powershell": "node \"$HOME\\.synctx-plugin\\scripts\\sync-engine.js\" push",
+        "timeoutSec": 120
+      }
+    ],
+    "sessionEnd": [
+      {
+        "type": "command",
+        "bash": "node \"$HOME/.synctx-plugin/scripts/sync-engine.js\" push",
+        "powershell": "node \"$HOME\\.synctx-plugin\\scripts\\sync-engine.js\" push",
+        "timeoutSec": 120
+      }
+    ],
+    "errorOccurred": [
+      {
+        "type": "command",
+        "bash": "node \"$HOME/.synctx-plugin/scripts/sync-engine.js\" push",
+        "powershell": "node \"$HOME\\.synctx-plugin\\scripts\\sync-engine.js\" push",
+        "timeoutSec": 120
+      }
+    ]
+  }
+}
