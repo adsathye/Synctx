@@ -1103,7 +1103,7 @@ Environment Variables:
 const { action, args } = parseArgs();
 
 // Commands that require interactive first-run setup
-const INTERACTIVE_COMMANDS = ['sync', 'restore', 'clean', 'list', 'list-copilot', 'list-claude', 'prune', 'delete', 'tag', 'untag', 'tags', 'uninstall', 'status', 'help', '-help', '--help', '-h'];
+const INTERACTIVE_COMMANDS = ['sync', 'restore', 'clean', 'list', 'list-copilot', 'list-claude', 'prune', 'delete', 'tag', 'untag', 'tags', 'uninstall', 'help', '-help', '--help', '-h'];
 
 async function main() {
   // Clean up stale locks from crashed daemons
