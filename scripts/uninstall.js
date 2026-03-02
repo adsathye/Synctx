@@ -147,13 +147,13 @@ async function main() {
     } catch (err) {
       const stderr = (err.stderr || err.message || '').toLowerCase();
       if (stderr.includes('delete_repo')) {
-        console.log(`  [warn] Missing delete_repo permission. Run:`);
+        console.log(`  [warn] Missing delete_repo permission. Run these after uninstall:`);
         console.log(`     gh auth refresh -s delete_repo`);
-        console.log(`     Then retry: synctx uninstall`);
+        console.log(`     gh repo delete ${repoOwner}/${repoName} --yes`);
       } else {
-        console.log(`  [warn] Failed to delete remote repo. Delete manually at:`);
-        console.log(`     https://github.com/${repoOwner}/${repoName}/settings`);
-        console.log(`     (You may need: gh auth refresh -s delete_repo)`);
+        console.log(`  [warn] Could not delete remote repo. Run after uninstall:`);
+        console.log(`     gh repo delete ${repoOwner}/${repoName} --yes`);
+        console.log(`     or delete at: https://github.com/${repoOwner}/${repoName}/settings`);
       }
     }
   }
