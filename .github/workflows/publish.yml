@@ -1,0 +1,109 @@
+name: Publish to npm
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (do not publish)'
+        required: false
+        default: 'false'
+        type: boolean
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  validate:
+    name: Validate & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Syntax check
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Validate JSON files
+        run: |
+          node -e "JSON.parse(require('fs').readFileSync('package.json','utf8'))"
+          node -e "JSON.parse(require('fs').readFileSync('plugin.json','utf8'))"
+          node -e "JSON.parse(require('fs').readFileSync('hooks.json','utf8'))"
+
+      - name: Version consistency
+        run: |
+          PKG_VER=$(node -e "console.log(require('./package.json').version)")
+          PLUGIN_VER=$(node -e "console.log(require('./plugin.json').version)")
+          echo "package.json: $PKG_VER"
+          echo "plugin.json:  $PLUGIN_VER"
+          if [ "$PKG_VER" != "$PLUGIN_VER" ]; then
+            echo "::error::Version mismatch: package.json=$PKG_VER plugin.json=$PLUGIN_VER"
+            exit 1
+          fi
+          # If triggered by tag, verify tag matches package version
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            TAG_VER="${GITHUB_REF#refs/tags/v}"
+            if [ "$PKG_VER" != "$TAG_VER" ]; then
+              echo "::error::Tag version ($TAG_VER) does not match package.json ($PKG_VER)"
+              exit 1
+            fi
+          fi
+
+      - name: Validate package tarball
+        run: |
+          npm pack --dry-run 2>&1 | tee pack-output.txt
+          # Ensure tests and dev files are excluded
+          if grep -q "tests/" pack-output.txt; then
+            echo "::error::tests/ directory should not be in the package"
+            exit 1
+          fi
+          if grep -q "logo.png" pack-output.txt; then
+            echo "::error::logo.png should not be in the package"
+            exit 1
+          fi
+          # Check package size is reasonable (< 500KB)
+          SIZE=$(grep "package size" pack-output.txt | grep -oE '[0-9.]+\s*(kB|KB|MB)' | head -1)
+          echo "Package size: $SIZE"
+
+  publish:
+    name: Publish
+    needs: validate
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'true')
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Publish to npm
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  dry-run:
+    name: Dry Run
+    needs: validate
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Dry run publish
+        run: npm publish --dry-run

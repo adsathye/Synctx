@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Unit Test Suite** — 94 tests covering config, format, tags, tombstones, lock, and file-manager modules. Run with `npm run test:unit`.
+- **CI/CD Pipeline** — Multi-node (18, 20, 22) and cross-platform (ubuntu, windows) CI matrix with lint, unit tests, JSON validation, package tarball validation, and version consistency checks.
+- **npm Publish Workflow** — Tag-triggered (`v*`) automated publishing to npm with `--provenance` attestation. Includes dry-run support via `workflow_dispatch`.
+- **Publish Safety Net** — `prepublishOnly` script runs lint + unit tests before any `npm publish` from local machine.
+- **Package Optimization** — `.npmignore` excludes tests, logo, GitHub CI files, and docs-only files, reducing package size from ~300KB to ~64KB.
 - **Session Tombstones** — Deleted, pruned, and cleaned sessions are recorded in `.deletions.json` to prevent re-sync from other machines. Tags are automatically released when sessions are tombstoned.
 - **Prune Skill** — AI-driven `prune-sessions` skill for age-based session cleanup.
 - **list-copilot / list-claude Commands** — Shorthand aliases for `list --cli copilot` and `list --cli claude`.
