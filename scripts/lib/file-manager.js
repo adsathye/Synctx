@@ -160,6 +160,22 @@ function stageFiles() {
   const Tombstones = require('./tombstones');
   const tombstoneData = Tombstones.readAll();
 
+  // Proactive cleanup: remove tombstoned sessions that linger in staging
+  for (const cli of getCLIMappings()) {
+    for (const source of cli.sources) {
+      const folderName = path.basename(source);
+      const stagedDir = path.join(CONFIG.syncDir, cli.name, folderName);
+      if (!fs.existsSync(stagedDir)) continue;
+      try {
+        for (const entry of fs.readdirSync(stagedDir)) {
+          if (entry in tombstoneData) {
+            fs.rmSync(path.join(stagedDir, entry), { recursive: true, force: true });
+          }
+        }
+      } catch { /* best effort */ }
+    }
+  }
+
   for (const cli of getCLIMappings()) {
     let cliHasSources = false;
     

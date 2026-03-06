@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-03-06
+
+### Fixed
+
+- **Tombstone guard on restore/tag** — `restore` and `tag` commands now check for tombstoned (deleted) sessions and show a clear "has been deleted" error instead of allowing operations on deleted sessions
+- **findSession skips tombstoned sessions** — centralized guard in `findSession()` prevents returning sessions that have been deleted, even from local CLI directory fallback
+- **list filters tombstoned sessions** — `list` command now explicitly filters out tombstoned sessions from display
+- **stageFiles cleans tombstoned sessions** — `stageFiles()` now proactively removes tombstoned sessions from the staging directory before copying, preventing stale data from being synced
+
+### Added
+
+- **list.test.js** — 9 unit tests covering `findSession()` tombstone filtering (exact match, partial match, null input, mixed live/tombstoned sessions)
+
 ## [1.0.0] - 2026-03-02
 
 ### Initial Public Release
@@ -27,7 +40,7 @@ Secure, cross-device session synchronizer for GitHub Copilot CLI and Claude Code
 - **24-Hour Git GC** — periodic aggressive garbage collection for disk optimization
 - **Cross-Platform** — Windows (primary), macOS/Linux (upcoming)
 - **Zero Dependencies** — Node.js stdlib only
-- **Unit Tests** — 94 tests covering core modules
+- **Unit Tests** — 103 tests covering core modules
 - **E2E Tests** — 69 scenarios on Windows (isolated home directory)
 - **Load Tests** — 180 tests (5 users × 11 scenarios)
 - **CI/CD** — GitHub Actions (Ubuntu + Windows) + npm publish workflow

@@ -737,7 +737,14 @@ const COMMANDS = {
         pr.update(`Finding ${target}...`);
         const session = ListCmd.findSession(sessionId);
         if (!session) {
-          pr.fail(`Session "${target}" not found`);
+          const Tombstones = require('./lib/tombstones');
+          const tombstones = Tombstones.readAll();
+          const tombstoned = Object.keys(tombstones).find(k => k === sessionId || k.startsWith(sessionId));
+          if (tombstoned) {
+            pr.fail(`Session "${target}" has been deleted and cannot be restored`);
+          } else {
+            pr.fail(`Session "${target}" not found`);
+          }
           return;
         }
 
@@ -982,7 +989,14 @@ const COMMANDS = {
     const ListCmd = require('./lib/commands/list');
     const session = ListCmd.findSession(sessionId);
     if (!session) {
-      console.error(`[error] Session "${sessionId}" not found.`);
+      const Tombstones = require('./lib/tombstones');
+      const tombstones = Tombstones.readAll();
+      const tombstoned = Object.keys(tombstones).find(k => k === sessionId || k.startsWith(sessionId));
+      if (tombstoned) {
+        console.error(`[error] Session "${sessionId}" has been deleted and cannot be tagged.`);
+      } else {
+        console.error(`[error] Session "${sessionId}" not found.`);
+      }
       return;
     }
 

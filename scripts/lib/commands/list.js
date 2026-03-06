@@ -19,6 +19,7 @@ const { CONFIG, getCLIMappings } = require('../config');
 const { resolveCLIFilter, getLabel } = require('../cli-detect');
 const { formatBytes } = require('../format');
 const Tags = require('../tags');
+const Tombstones = require('../tombstones');
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -110,9 +111,12 @@ function execute(options = {}) {
       if (sessions.length === 0) continue;
       cliHasSessions = true;
 
+      const tombstoneData = Tombstones.readAll();
+
       for (const s of sessions) {
-        // Skip empty sessions (cleaned/tombstoned — directory exists but no files)
+        // Skip empty or tombstoned sessions
         if (s.files === 0) continue;
+        if (s.name in tombstoneData) continue;
 
         const date = s.modified.toISOString().replace(/T/, ' ').replace(/\..+/, '');
         const size = formatBytes(s.bytes);
@@ -168,6 +172,7 @@ function findSession(id) {
 
       for (const s of sessions) {
         if (s.name === id || s.name.startsWith(id)) {
+          if (Tombstones.isDeleted(s.name)) continue;
           return { id: s.name, cli: cli.name, path: s.path };
         }
       }
@@ -182,6 +187,7 @@ function findSession(id) {
 
       for (const s of sessions) {
         if (s.name === id || s.name.startsWith(id)) {
+          if (Tombstones.isDeleted(s.name)) continue;
           return { id: s.name, cli: cli.name, path: s.path };
         }
       }
