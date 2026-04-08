@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-04-08
+
+### Fixed
+
+- **Git for Windows performance** — Eliminated ~12 redundant `git.exe` process spawns per sync, reducing background push latency by 5–30s on Windows
+  - **Fetch deduplication** — 60-second dedup window prevents triple-fetch (daemon pre-pull, `canAmendLastCommit`, `commitAndPush`) from hitting the network 3× per sync
+  - **Skip redundant `git add` + `git status`** — `commitAndPush()` now accepts pre-computed status from `sync()`, avoiding duplicate staging calls
+  - **Bootstrap config check** — Reads `.git/config` directly to skip 5 `git config` process spawns when already configured
+  - **Combined `git log` calls** — `canAmendLastCommit()` fetches timestamp and subject in a single `git log -1 --format=%ct%n%s` call instead of two
+  - **Removed unnecessary `stash`/`pop`** — Working dir is always clean after commit; stash is now only used in daemon pre-pull where uncommitted changes may exist
+  - **Non-blocking `git gc`** — Replaced synchronous `git gc --aggressive` (minutes-long) with detached `git gc` (background, 10× faster)
+
+### Added
+
+- **`fetchAndMerge()` helper** — Consolidates the stash→fetch→merge→pop pattern used by the daemon and `commitAndPush`, exported for reuse
+- **`ensureFetched()` dedup** — Module-level fetch deduplication prevents redundant network round-trips within a 60s window
+
 ## [1.0.1] - 2026-03-06
 
 ### Fixed

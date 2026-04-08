@@ -1,6 +1,6 @@
 {
   "name": "synctx",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Secure AI CLI session synchronizer with built-in Gitleaks secret scanning for GitHub Copilot CLI and Claude Code.",
   "main": "scripts/sync-engine.js",
   "bin": {

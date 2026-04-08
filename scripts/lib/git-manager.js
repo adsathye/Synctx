@@ -12,7 +12,7 @@
  * @license MIT
  */
 
-const { execSync, execFileSync } = require('child_process');
+const { execSync, execFileSync, spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const { CONFIG } = require('./config');
@@ -87,6 +87,86 @@ function gitExecStr(cmd, opts = {}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Fetch Deduplication
+// On Windows, git process spawning is expensive (~50-100ms per CreateProcess).
+// Prevents redundant network fetches within a 60-second window.
+// ─────────────────────────────────────────────────────────────────────────────
+
+let _lastFetchMs = 0;
+const FETCH_DEDUP_WINDOW = 60_000;
+
+/**
+ * Fetch from origin if not already done within the dedup window.
+ * Eliminates redundant network round-trips when multiple functions
+ * (daemon pre-pull, canAmendLastCommit, commitAndPush) each request a fetch.
+ *
+ * @returns {boolean} true if a fetch was actually performed.
+ */
+function ensureFetched() {
+  if (Date.now() - _lastFetchMs < FETCH_DEDUP_WINDOW) {
+    return false;
+  }
+  gitExec(['fetch', 'origin', CONFIG.branch]);
+  _lastFetchMs = Date.now();
+  return true;
+}
+
+/**
+ * Check if essential git configs are already set by reading .git/config
+ * directly. Avoids spawning 5 separate git-config processes on every run.
+ *
+ * @returns {boolean}
+ */
+function isGitConfigured() {
+  try {
+    const configPath = path.join(CONFIG.syncDir, '.git', 'config');
+    const content = fs.readFileSync(configPath, 'utf8');
+    return content.includes('synctx@noreply') &&
+           content.includes('gh auth git-credential');
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Fetch and merge remote changes into the staging directory.
+ * Consolidates the stash→fetch→merge→pop pattern used by the daemon
+ * pre-pull and commitAndPush fallback paths.
+ *
+ * @param {Object} [opts]
+ * @param {boolean} [opts.stash=false] — Stash uncommitted changes before
+ *   merge and pop after. Only needed when there may be uncommitted work
+ *   (e.g., daemon pre-pull). After a commit, working dir is clean.
+ */
+function fetchAndMerge({ stash = false } = {}) {
+  if (stash) {
+    try { gitExec(['stash']); } catch { /* nothing to stash */ }
+  }
+
+  try {
+    ensureFetched();
+    try {
+      gitExec(['merge', `origin/${CONFIG.branch}`, '--allow-unrelated-histories', '-X', 'theirs', '--no-edit']);
+    } catch {
+      try {
+        gitExec(['checkout', '--theirs', '.']);
+        gitExec(['add', '.']);
+        gitExec(['commit', '--no-edit', '-m', 'Merge remote changes']);
+      } catch { /* best effort */ }
+    }
+  } catch (fetchError) {
+    const msg = fetchError.message || '';
+    if (!msg.includes('no matching remote') && !msg.includes("couldn't find remote ref")) {
+      Logger.log('ERROR', `Git pull encountered an issue: ${msg}`);
+    }
+  }
+
+  if (stash) {
+    try { gitExec(['stash', 'pop']); } catch { /* no stash or conflict */ }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Ensure the staging directory has a Git repository linked to a private
@@ -95,14 +175,16 @@ function gitExecStr(cmd, opts = {}) {
 function bootstrap() {
   // Ensure essential git configs are always set (even on re-runs)
   if (fs.existsSync(path.join(CONFIG.syncDir, '.git'))) {
-    // Always ensure credential helper and identity are configured
-    try {
-      gitExec(['config', 'credential.helper', '!gh auth git-credential']);
-      gitExec(['config', 'user.name', 'Synctx']);
-      gitExec(['config', 'user.email', 'synctx@noreply']);
-      gitExec(['config', 'core.autocrlf', 'false']);
-      gitExec(['config', 'core.safecrlf', 'false']);
-    } catch { /* best-effort on existing repos */ }
+    // Skip config if already set — avoids 5 git process spawns per run
+    if (!isGitConfigured()) {
+      try {
+        gitExec(['config', 'credential.helper', '!gh auth git-credential']);
+        gitExec(['config', 'user.name', 'Synctx']);
+        gitExec(['config', 'user.email', 'synctx@noreply']);
+        gitExec(['config', 'core.autocrlf', 'false']);
+        gitExec(['config', 'core.safecrlf', 'false']);
+      } catch { /* best-effort on existing repos */ }
+    }
 
     // Check if current remote is reachable — if so, keep it
     try {
@@ -282,8 +364,10 @@ function bootstrap() {
  * git history at ~6 commits/day instead of hundreds.
  *
  * @param {string} message — Commit message.
+ * @param {string} [precomputedStatus] — Pre-computed `git status --porcelain`
+ *   output from the caller, to avoid duplicate git add + status calls.
  */
-function commitAndPush(message) {
+function commitAndPush(message, precomputedStatus) {
   // Remove stale .git/index.lock left by a previous crash (e.g., power loss
   // or SIGKILL during a git operation). Without this, all subsequent git
   // commands would fail with "Unable to create index.lock: File exists".
@@ -293,13 +377,16 @@ function commitAndPush(message) {
     Logger.log('INFO', 'Removed stale .git/index.lock from previous crash.');
   }
 
-  try {
-    gitExec(['add', '.']);
-  } catch (error) {
-    throw new Error(`Failed to stage files in Git: ${error.message}`);
+  // Reuse pre-computed status from caller to avoid duplicate add+status
+  let status = precomputedStatus;
+  if (!status) {
+    try {
+      gitExec(['add', '.']);
+    } catch (error) {
+      throw new Error(`Failed to stage files in Git: ${error.message}`);
+    }
+    status = gitExecStr('git status --porcelain').trim();
   }
-
-  const status = gitExecStr('git status --porcelain').trim();
 
   if (!status) {
     return; // No changes to commit
@@ -331,19 +418,12 @@ function commitAndPush(message) {
   Lock.refresh();
 
   if (isFirstCommit) {
-    // First commit — try direct push, fall back to pull+push if remote has history
+    // First commit — try direct push, fall back to fetch+merge if remote has history
     try {
       gitExecWithStderr(['push', '-u', 'origin', CONFIG.branch]);
     } catch {
       try {
-        try { gitExec(['stash']); } catch {}
-        gitExec(['fetch', 'origin', CONFIG.branch]);
-        try {
-          gitExec(['merge', `origin/${CONFIG.branch}`, '--allow-unrelated-histories', '-X', 'theirs', '--no-edit']);
-        } catch {
-          try { gitExec(['checkout', '--theirs', '.']); gitExec(['add', '.']); gitExec(['commit', '--no-edit', '-m', 'Merge remote']); } catch {}
-        }
-        try { gitExec(['stash', 'pop']); } catch {}
+        fetchAndMerge();
         gitExecWithStderr(['push', '-u', 'origin', CONFIG.branch]);
       } catch (retryError) {
         throw new Error(`Git push failed: ${retryError.message}`);
@@ -355,44 +435,18 @@ function commitAndPush(message) {
     try {
       gitExecWithStderr(['push', '--force-with-lease', 'origin', CONFIG.branch]);
     } catch {
-      // force-with-lease rejected — another device pushed. Fall back to
-      // normal pull+push (creates a merge commit, which is fine).
+      // force-with-lease rejected — another device pushed; merge and retry
       try {
-        try { gitExec(['stash']); } catch {}
-        gitExec(['fetch', 'origin', CONFIG.branch]);
-        try {
-          gitExec(['merge', `origin/${CONFIG.branch}`, '--allow-unrelated-histories', '-X', 'theirs', '--no-edit']);
-        } catch {
-          try { gitExec(['checkout', '--theirs', '.']); gitExec(['add', '.']); gitExec(['commit', '--no-edit', '-m', 'Merge remote']); } catch {}
-        }
-        try { gitExec(['stash', 'pop']); } catch {}
+        fetchAndMerge();
         gitExecWithStderr(['push', 'origin', CONFIG.branch]);
       } catch (pushError) {
         throw new Error(`Git push failed: ${pushError.message}`);
       }
     }
   } else {
-    // Normal push: stash → fetch → merge → pop → push
-    try { gitExec(['stash']); } catch { /* nothing to stash */ }
-    try {
-      gitExec(['fetch', 'origin', CONFIG.branch]);
-      try {
-        gitExec(['merge', `origin/${CONFIG.branch}`, '--allow-unrelated-histories', '-X', 'theirs', '--no-edit']);
-      } catch {
-        try {
-          gitExec(['checkout', '--theirs', '.']);
-          gitExec(['add', '.']);
-          gitExec(['commit', '--no-edit', '-m', 'Merge remote changes']);
-        } catch { /* best effort */ }
-      }
-    } catch (pullError) {
-      const msg = pullError.message || '';
-      if (!msg.includes('no matching remote') && !msg.includes("couldn't find remote ref")) {
-        Logger.log('ERROR', `Git pull encountered an issue: ${msg}`);
-      }
-    }
-    try { gitExec(['stash', 'pop']); } catch { /* no stash */ }
-
+    // Normal push: fetch+merge (dedup-aware), then push.
+    // Stash is unnecessary — we just committed, so working dir is clean.
+    fetchAndMerge();
     try {
       gitExecWithStderr(['push', 'origin', CONFIG.branch]);
     } catch (pushError) {
@@ -409,7 +463,12 @@ function commitAndPush(message) {
  */
 function canAmendLastCommit() {
   try {
-    const timestamp = gitExecStr('git log -1 --format=%ct').trim();
+    // Single git process: fetch both timestamp and subject in one call
+    // (saves one git.exe spawn vs two separate git log calls)
+    const logOutput = gitExecStr('git log -1 --format=%ct%n%s').trim();
+    const newlineIdx = logOutput.indexOf('\n');
+    const timestamp = newlineIdx >= 0 ? logOutput.slice(0, newlineIdx) : logOutput;
+    const subject = newlineIdx >= 0 ? logOutput.slice(newlineIdx + 1) : '';
 
     if (!timestamp) {
       Logger.log('DEBUG', 'canAmend: no timestamp');
@@ -423,8 +482,6 @@ function canAmendLastCommit() {
     }
 
     // Verify it's our commit (not a manual commit or from another tool)
-    const subject = gitExecStr('git log -1 --format=%s').trim();
-
     const isOurCommit = subject.startsWith('Secure Auto-sync') ||
                         subject.startsWith('Clean:') ||
                         subject.startsWith('Delete session:') ||
@@ -442,7 +499,7 @@ function canAmendLastCommit() {
   // amend — force-push could overwrite their changes even with --force-with-lease
   // if we haven't fetched yet.
   try {
-    gitExec(['fetch', 'origin', CONFIG.branch]);
+    ensureFetched(); // Dedup-aware: skips if fetched within 60s window
     const localHead = gitExecStr('git rev-parse HEAD').trim();
     const remoteHead = gitExecStr(`git rev-parse origin/${CONFIG.branch}`).trim();
     if (localHead !== remoteHead) {
@@ -501,7 +558,7 @@ function sync() {
   const commitMessage = `Secure Auto-sync (${cliLabel}): ${dateStr}`;
 
   try {
-    commitAndPush(commitMessage);
+    commitAndPush(commitMessage, status);
   } catch (error) {
     Logger.log('ERROR', error.message);
     throw error;
@@ -521,9 +578,10 @@ function sync() {
     Logger.log('INFO', `Claude session data synced.`, { cli: 'claude' });
   }
 
-  // Periodic aggressive garbage collection — compresses git objects to save disk.
-  // Only runs once per gcInterval (default 24h) since it can be slow on large repos.
-  // Safe: only repackages existing committed objects, never deletes data.
+  // Periodic garbage collection — compresses git objects to save disk.
+  // Only runs once per gcInterval (default 24h).
+  // Uses plain gc (not --aggressive which is 10x slower) and runs detached
+  // to avoid blocking the sync daemon on Windows.
   try {
     let shouldGc = true;
     try {
@@ -535,10 +593,16 @@ function sync() {
     } catch { /* first gc run */ }
 
     if (shouldGc) {
-      Logger.log('INFO', 'Running git gc --aggressive (periodic maintenance)...');
-      gitExec(['gc', '--aggressive', '--prune=now']);
+      Logger.log('INFO', 'Starting background git gc (periodic maintenance)...');
+      const gc = spawn('git', ['gc', '--prune=now'], {
+        cwd: CONFIG.syncDir,
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true,
+      });
+      gc.unref();
       fs.writeFileSync(CONFIG.lastGcFile, new Date().toISOString());
-      Logger.log('INFO', 'Git gc completed.');
+      Logger.log('INFO', 'Git gc started in background.');
     }
   } catch {
     /* non-critical — skip on failure */
@@ -576,4 +640,4 @@ function restore() {
   );
 }
 
-module.exports = { bootstrap, sync, restore, commitAndPush };
+module.exports = { bootstrap, sync, restore, commitAndPush, fetchAndMerge };

@@ -358,27 +358,12 @@ function runDaemon() {
     GitManager.bootstrap();
     Lock.refresh();
 
-    // Always pull latest from remote (ensures staging has other machines' data)
+    // Pull latest from remote (ensures staging has other machines' data).
+    // Uses fetchAndMerge which dedup-fetches to avoid redundant network calls
+    // later in canAmendLastCommit and commitAndPush.
     try {
-      execFileSync('git', ['stash'], { cwd: CONFIG.syncDir, stdio: 'ignore', windowsHide: true });
-    } catch { /* nothing to stash */ }
-    try {
-      execFileSync('git', ['fetch', 'origin', CONFIG.branch], { cwd: CONFIG.syncDir, stdio: 'ignore', windowsHide: true });
-      try {
-        execFileSync('git', ['merge', `origin/${CONFIG.branch}`, '--allow-unrelated-histories', '-X', 'theirs', '--no-edit'], {
-          cwd: CONFIG.syncDir, stdio: 'ignore', windowsHide: true,
-        });
-      } catch {
-        try {
-          execFileSync('git', ['checkout', '--theirs', '.'], { cwd: CONFIG.syncDir, stdio: 'ignore', windowsHide: true });
-          execFileSync('git', ['add', '.'], { cwd: CONFIG.syncDir, stdio: 'ignore', windowsHide: true });
-          execFileSync('git', ['commit', '--no-edit', '-m', 'Merge remote'], { cwd: CONFIG.syncDir, stdio: 'ignore', windowsHide: true });
-        } catch { /* best effort */ }
-      }
+      GitManager.fetchAndMerge({ stash: true });
     } catch { /* offline or empty repo */ }
-    try {
-      execFileSync('git', ['stash', 'pop'], { cwd: CONFIG.syncDir, stdio: 'ignore', windowsHide: true });
-    } catch { /* no stash */ }
     Lock.refresh();
 
     // Always stage and push — delta copy skips unchanged files efficiently.
